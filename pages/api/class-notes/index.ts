@@ -34,7 +34,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         strengths: body.strengths?.trim() ?? "",
         issues: body.issues?.trim() ?? "",
         follow_up: body.follow_up?.trim() ?? "",
-        teacher_note: body.teacher_note?.trim() ?? ""
+        teacher_note: body.teacher_note?.trim() ?? "",
+        energy_score: body.energy_score?.trim() ?? "3",
+        body_comfort_score: body.body_comfort_score?.trim() ?? "3",
+        focus_score: body.focus_score?.trim() ?? "3",
+        class_time: body.class_time?.trim() ?? ""
       });
 
       return res.status(201).json({ classNote });

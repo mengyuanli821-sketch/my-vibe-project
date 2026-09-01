@@ -1,21 +1,27 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
-import { FormField, TextArea, TextInput } from "@/components/FormField";
+import { FormField, MultiSelect, RatingSelector, TextArea, TextInput } from "@/components/FormField";
 import { Layout } from "@/components/Layout";
+import { CLASS_ISSUE_OPTIONS, toggleSelection } from "@/lib/options";
 import type { NewClassNoteInput, StudentWithStats } from "@/types/student";
 
 const today = new Date().toISOString().slice(0, 10);
+const currentTime = new Date().toTimeString().slice(0, 5);
 
 const initialForm: NewClassNoteInput = {
   student_id: "",
   class_date: today,
+  class_time: currentTime,
   class_type: "",
   today_condition: "",
   strengths: "",
   issues: "",
   follow_up: "",
-  teacher_note: ""
+  teacher_note: "",
+  energy_score: "3",
+  body_comfort_score: "3",
+  focus_score: "3"
 };
 
 export default function NewClassNotePage() {
@@ -46,6 +52,13 @@ export default function NewClassNotePage() {
 
     loadStudents();
   }, []);
+
+  useEffect(() => {
+    const selectedStudent = typeof router.query.student_id === "string" ? router.query.student_id : "";
+    if (selectedStudent) {
+      setForm((current) => ({ ...current, student_id: selectedStudent }));
+    }
+  }, [router.query.student_id]);
 
   function updateInput(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm((current) => ({
@@ -84,13 +97,13 @@ export default function NewClassNotePage() {
         <title>New Class Note | AI Student Notebook</title>
       </Head>
 
-      <form className="grid max-w-3xl gap-5 rounded-md border border-stone-200 bg-white p-5" onSubmit={submitForm}>
+      <form className="form-shell" onSubmit={submitForm}>
         {error ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
         <div className="grid gap-5 sm:grid-cols-2">
           <FormField label="Student">
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-950 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="form-control"
               disabled={isLoadingStudents}
               name="student_id"
               onChange={updateInput}
@@ -108,9 +121,12 @@ export default function NewClassNotePage() {
           <FormField label="Class date">
             <TextInput name="class_date" onChange={updateInput} required type="date" value={form.class_date} />
           </FormField>
+          <FormField label="Class time">
+            <TextInput name="class_time" onChange={updateInput} type="time" value={form.class_time} />
+          </FormField>
           <FormField label="Class type">
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-950 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="form-control"
               name="class_type"
               onChange={updateInput}
               value={form.class_type}
@@ -125,20 +141,30 @@ export default function NewClassNotePage() {
           </FormField>
         </div>
 
-        <FormField label="Today's condition">
-          <TextArea name="today_condition" onChange={updateInput} placeholder="Energy, mood, soreness, limitations..." value={form.today_condition} />
+        <section>
+          <div className="mb-3">
+            <h2 className="font-serif text-xl text-[#294a3c]">Class pulse</h2>
+            <p className="mt-1 text-sm text-stone-500">A quick check-in across body, energy and mind.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <RatingSelector label="Energy" lowLabel="Depleted" highLabel="Vibrant" onChange={(value) => setForm((current) => ({ ...current, energy_score: value }))} value={form.energy_score} />
+            <RatingSelector label="Body comfort" lowLabel="Sensitive" highLabel="Easeful" onChange={(value) => setForm((current) => ({ ...current, body_comfort_score: value }))} value={form.body_comfort_score} />
+            <RatingSelector label="Focus" lowLabel="Scattered" highLabel="Present" onChange={(value) => setForm((current) => ({ ...current, focus_score: value }))} value={form.focus_score} />
+          </div>
+        </section>
+
+        <FormField label="Areas to support" hint="Choose all observations from today's practice.">
+          <MultiSelect
+            onToggle={(option) => setForm((current) => ({ ...current, issues: toggleSelection(current.issues, option) }))}
+            options={CLASS_ISSUE_OPTIONS}
+            value={form.issues}
+          />
         </FormField>
-        <FormField label="Strengths">
-          <TextArea name="strengths" onChange={updateInput} placeholder="What improved or worked well today?" value={form.strengths} />
+        <FormField label="Class highlight" hint="One short note is enough.">
+          <TextInput name="strengths" onChange={updateInput} placeholder="What opened, improved or felt joyful?" value={form.strengths} />
         </FormField>
-        <FormField label="Issues">
-          <TextArea name="issues" onChange={updateInput} placeholder="Pain points, movement limits, confusion, fatigue..." value={form.issues} />
-        </FormField>
-        <FormField label="Follow up">
-          <TextArea name="follow_up" onChange={updateInput} placeholder="What should be checked next class?" value={form.follow_up} />
-        </FormField>
-        <FormField label="Teacher note">
-          <TextArea name="teacher_note" onChange={updateInput} value={form.teacher_note} />
+        <FormField label="Teacher reflection" hint="Optional cue, intention or follow-up for next time.">
+          <TextArea name="teacher_note" onChange={updateInput} placeholder="A cue to remember, a theme to revisit, or a moment of insight…" value={form.teacher_note} />
         </FormField>
 
         <div className="flex flex-wrap gap-3">

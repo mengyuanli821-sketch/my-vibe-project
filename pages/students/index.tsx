@@ -2,6 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
+import { ClassStatusLight } from "@/components/ClassStatusLight";
 import type { StudentWithStats } from "@/types/student";
 
 export default function StudentsPage() {
@@ -41,11 +42,13 @@ export default function StudentsPage() {
     return students.filter((student) => student.name.toLowerCase().includes(query));
   }, [search, students]);
 
+  const totalClasses = students.reduce((total, student) => total + student.class_count, 0);
+
   return (
     <Layout
       title="Students"
       action={
-        <Link className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800" href="/students/new">
+        <Link className="rounded-full bg-[#557a68] px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-[#416353]" href="/students/new">
           New student
         </Link>
       }
@@ -54,11 +57,30 @@ export default function StudentsPage() {
         <title>Students | AI Student Notebook</title>
       </Head>
 
+      {!isLoading && !error ? (
+        <section className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-[#ddd5c8] bg-white/80 p-4">
+            <p className="text-xs text-stone-500">Community</p>
+            <p className="mt-1 font-serif text-3xl text-[#294a3c]">{students.length}</p>
+            <p className="text-xs text-stone-500">students held in care</p>
+          </div>
+          <div className="rounded-2xl border border-[#ddd5c8] bg-white/80 p-4">
+            <p className="text-xs text-stone-500">Practice journey</p>
+            <p className="mt-1 font-serif text-3xl text-[#294a3c]">{totalClasses}</p>
+            <p className="text-xs text-stone-500">classes remembered</p>
+          </div>
+          <div className="rounded-2xl border border-[#ead7c3] bg-[#f7ede3]/80 p-4">
+            <p className="text-xs text-[#8b6647]">Today’s intention</p>
+            <p className="mt-2 font-serif text-lg italic text-[#6e4f39]">Teach the person, not the pose.</p>
+          </div>
+        </section>
+      ) : null}
+
       <div className="mb-5 max-w-md">
         <label className="grid gap-2 text-sm font-medium text-stone-800">
           <span>Search by name</span>
           <input
-            className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+            className="form-control"
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Student name"
             value={search}
@@ -70,15 +92,17 @@ export default function StudentsPage() {
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
       {!isLoading && !error ? (
-        <div className="overflow-hidden rounded-md border border-stone-200 bg-white">
-          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-600">
+        <div className="overflow-hidden rounded-2xl border border-[#ddd5c8] bg-white/90 shadow-[0_12px_40px_rgba(57,71,61,0.04)]">
+          <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
+            <thead className="bg-[#f1eee7] text-xs uppercase tracking-wide text-stone-600">
               <tr>
                 <th className="px-4 py-3 font-semibold">Name</th>
                 <th className="px-4 py-3 font-semibold">Experience</th>
                 <th className="px-4 py-3 font-semibold">Goals</th>
                 <th className="px-4 py-3 font-semibold">Body conditions</th>
-                <th className="px-4 py-3 font-semibold">Last class</th>
+                <th className="px-4 py-3 font-semibold">Last class date</th>
+                <th className="px-4 py-3 font-semibold">Last class time</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Classes</th>
               </tr>
             </thead>
@@ -94,6 +118,8 @@ export default function StudentsPage() {
                   <td className="px-4 py-3 text-stone-700">{student.goals || "None recorded"}</td>
                   <td className="px-4 py-3 text-stone-700">{student.body_conditions || "None recorded"}</td>
                   <td className="px-4 py-3 text-stone-700">{student.last_class_date || "No classes yet"}</td>
+                  <td className="px-4 py-3 text-stone-700">{student.last_class_time || "—"}</td>
+                  <td className="px-4 py-3"><ClassStatusLight compact status={student.last_class_status} /></td>
                   <td className="px-4 py-3 text-stone-700">{student.class_count}</td>
                 </tr>
               ))}

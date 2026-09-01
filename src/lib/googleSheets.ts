@@ -1,8 +1,22 @@
 import { google } from "googleapis";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { ClassNote, NewClassNoteInput, NewStudentInput, Student, StudentWithStats } from "@/types/student";
+import { getClassStatus } from "@/lib/classStatus";
 
 const STUDENTS_RANGE = "Students!A:J";
-const CLASS_NOTES_RANGE = "ClassNotes!A:K";
+const CLASS_NOTES_RANGE = "ClassNotes!A:O";
+const LOCAL_DATA_PATH = path.join(process.cwd(), ".data", "student-notebook.json");
+
+type LocalData = {
+  students: string[][];
+  classNotes: string[][];
+};
+
+const EMPTY_LOCAL_DATA: LocalData = {
+  students: [],
+  classNotes: []
+};
 
 const STUDENT_COLUMNS = [
   "id",
@@ -28,7 +42,11 @@ const CLASS_NOTE_COLUMNS = [
   "issues",
   "follow_up",
   "teacher_note",
-  "created_at"
+  "created_at",
+  "energy_score",
+  "body_comfort_score",
+  "focus_score",
+  "class_time"
 ] as const;
 
 function requiredEnv(name: string): string {
@@ -39,6 +57,43 @@ function requiredEnv(name: string): string {
   }
 
   return value;
+}
+
+function hasGoogleSheetsConfig() {
+  return Boolean(
+    process.env.GOOGLE_SHEET_ID &&
+      process.env.GOOGLE_CLIENT_EMAIL &&
+      process.env.GOOGLE_PRIVATE_KEY
+  );
+}
+
+async function readLocalData(): Promise<LocalData> {
+  try {
+    const contents = await readFile(LOCAL_DATA_PATH, "utf8");
+    const data = JSON.parse(contents) as Partial<LocalData>;
+
+    return {
+      students: Array.isArray(data.students) ? data.students : [],
+      classNotes: Array.isArray(data.classNotes) ? data.classNotes : []
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { ...EMPTY_LOCAL_DATA };
+    }
+
+    throw error;
+  }
+}
+
+function localCollectionForRange(data: LocalData, range: string) {
+  return range.startsWith("Students!") ? data.students : data.classNotes;
+}
+
+async function appendLocalRow(range: string, values: string[]) {
+  const data = await readLocalData();
+  localCollectionForRange(data, range).push(values);
+  await mkdir(path.dirname(LOCAL_DATA_PATH), { recursive: true });
+  await writeFile(LOCAL_DATA_PATH, JSON.stringify(data, null, 2), "utf8");
 }
 
 function getSheetsClient() {
@@ -97,7 +152,11 @@ function rowToClassNote(row: string[]): ClassNote {
     issues: cell(row, 7),
     follow_up: cell(row, 8),
     teacher_note: cell(row, 9),
-    created_at: cell(row, 10)
+    created_at: cell(row, 10),
+    energy_score: cell(row, 11),
+    body_comfort_score: cell(row, 12),
+    focus_score: cell(row, 13),
+    class_time: cell(row, 14)
   };
 }
 
@@ -105,7 +164,16 @@ function generateId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function classDateTime(note: ClassNote) {
+  return `${note.class_date}T${note.class_time || "00:00"}`;
+}
+
 async function readRows(range: string) {
+  if (!hasGoogleSheetsConfig()) {
+    const data = await readLocalData();
+    return localCollectionForRange(data, range);
+  }
+
   const sheets = getSheetsClient();
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: getSheetId(),
@@ -116,6 +184,11 @@ async function readRows(range: string) {
 }
 
 async function appendRow(range: string, values: string[]) {
+  if (!hasGoogleSheetsConfig()) {
+    await appendLocalRow(range, values);
+    return;
+  }
+
   const sheets = getSheetsClient();
 
   await sheets.spreadsheets.values.append({
@@ -147,11 +220,13 @@ export async function getStudentsWithStats(): Promise<StudentWithStats[]> {
   return students.map((student) => {
     const notesForStudent = classNotes
       .filter((note) => note.student_id === student.id)
-      .sort((a, b) => b.class_date.localeCompare(a.class_date));
+      .sort((a, b) => classDateTime(b).localeCompare(classDateTime(a)));
 
     return {
       ...student,
       last_class_date: notesForStudent[0]?.class_date ?? "",
+      last_class_time: notesForStudent[0]?.class_time ?? "",
+      last_class_status: getClassStatus(notesForStudent[0]),
       class_count: notesForStudent.length
     };
   });
@@ -197,7 +272,7 @@ export async function getClassNotes(studentId?: string): Promise<ClassNote[]> {
 
   return classNotes
     .filter((note) => note.student_id === studentId)
-    .sort((a, b) => b.class_date.localeCompare(a.class_date));
+    .sort((a, b) => classDateTime(b).localeCompare(classDateTime(a)));
 }
 
 export async function createClassNote(input: NewClassNoteInput): Promise<ClassNote> {
@@ -218,7 +293,11 @@ export async function createClassNote(input: NewClassNoteInput): Promise<ClassNo
     issues: input.issues,
     follow_up: input.follow_up,
     teacher_note: input.teacher_note,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    energy_score: input.energy_score,
+    body_comfort_score: input.body_comfort_score,
+    focus_score: input.focus_score,
+    class_time: input.class_time
   };
 
   await appendRow(CLASS_NOTES_RANGE, [
@@ -232,7 +311,11 @@ export async function createClassNote(input: NewClassNoteInput): Promise<ClassNo
     classNote.issues,
     classNote.follow_up,
     classNote.teacher_note,
-    classNote.created_at
+    classNote.created_at,
+    classNote.energy_score,
+    classNote.body_comfort_score,
+    classNote.focus_score,
+    classNote.class_time
   ]);
 
   return classNote;

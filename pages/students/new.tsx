@@ -1,8 +1,10 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { ChangeEvent, FormEvent, useState } from "react";
-import { FormField, TextArea, TextInput } from "@/components/FormField";
+import { FormField, MultiSelect, TextArea, TextInput } from "@/components/FormField";
+import { BodyMap } from "@/components/BodyMap";
 import { Layout } from "@/components/Layout";
+import { BODY_CONDITION_OPTIONS, toggleSelection } from "@/lib/options";
 import type { NewStudentInput } from "@/types/student";
 
 const initialForm: NewStudentInput = {
@@ -59,7 +61,7 @@ export default function NewStudentPage() {
         <title>New Student | AI Student Notebook</title>
       </Head>
 
-      <form className="grid max-w-3xl gap-5 rounded-md border border-stone-200 bg-white p-5" onSubmit={submitForm}>
+      <form className="form-shell" onSubmit={submitForm}>
         {error ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
         <div className="grid gap-5 sm:grid-cols-2">
@@ -71,7 +73,7 @@ export default function NewStudentPage() {
           </FormField>
           <FormField label="Age range">
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-950 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="form-control"
               name="age_range"
               onChange={updateInput}
               value={form.age_range}
@@ -87,7 +89,7 @@ export default function NewStudentPage() {
           </FormField>
           <FormField label="Experience level">
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-950 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+              className="form-control"
               name="experience_level"
               onChange={updateInput}
               value={form.experience_level}
@@ -104,10 +106,20 @@ export default function NewStudentPage() {
         <FormField label="Goals">
           <TextArea name="goals" onChange={updateInput} placeholder="Strength, flexibility, stress relief, posture..." value={form.goals} />
         </FormField>
-        <FormField label="Body conditions">
-          <TextArea name="body_conditions" onChange={updateInput} placeholder="Pregnancy, lower back tightness, knee sensitivity..." value={form.body_conditions} />
+        <FormField label="Areas that need support" hint="Select one or more areas on the front or back body. This is an observation tool, not a diagnosis.">
+          <BodyMap
+            onToggle={(option) => setForm((current) => ({ ...current, body_conditions: toggleSelection(current.body_conditions, option) }))}
+            value={form.body_conditions}
+          />
         </FormField>
-        <FormField label="Injury notes">
+        <FormField label="Wellbeing context" hint="Add any broader context that may affect practice.">
+          <MultiSelect
+            onToggle={(option) => setForm((current) => ({ ...current, body_conditions: toggleSelection(current.body_conditions, option) }))}
+            options={BODY_CONDITION_OPTIONS}
+            value={form.body_conditions}
+          />
+        </FormField>
+        <FormField label="Injury details" hint="Optional details that are not covered by the tags above.">
           <TextArea name="injury_notes" onChange={updateInput} value={form.injury_notes} />
         </FormField>
         <FormField label="Teacher notes">
