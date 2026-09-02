@@ -8,9 +8,9 @@ type FormFieldProps = {
 
 export function FormField({ label, children, hint }: FormFieldProps) {
   return (
-    <fieldset className="grid min-w-0 gap-2 border-0 p-0 text-sm font-medium text-stone-800">
+    <fieldset className="form-field grid min-w-0 gap-2 border-0 p-0 text-sm font-medium text-stone-800">
       <legend>{label}</legend>
-      {hint ? <p className="-mt-1 text-xs font-normal text-stone-500">{hint}</p> : null}
+      <p aria-hidden={!hint} className="form-field-hint -mt-1 text-xs font-normal text-stone-500">{hint || "\u00a0"}</p>
       {children}
     </fieldset>
   );

@@ -1,25 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { TeacherAdvice, TeacherProfile } from "@/types/teacher";
+import { EMPTY_TEACHER_PROFILE } from "@/lib/teacherConstants";
 
 const TEACHER_PATH = path.join(process.cwd(), ".data", "teacher-profile.json");
 
-export const EMPTY_TEACHER_PROFILE: TeacherProfile = {
-  name: "",
-  years_experience: "",
-  certifications: "",
-  primary_styles: "",
-  specialties: "",
-  teaching_philosophy: "",
-  strengths: "",
-  growth_edges: "",
-  sequencing_score: "3",
-  anatomy_score: "3",
-  cueing_score: "3",
-  observation_score: "3",
-  accessibility_score: "3",
-  updated_at: ""
-};
+export { EMPTY_TEACHER_PROFILE } from "@/lib/teacherConstants";
 
 export async function getTeacherProfile(): Promise<TeacherProfile> {
   try {

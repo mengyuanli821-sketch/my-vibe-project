@@ -23,3 +23,15 @@ export type TeacherAdvice = {
   nextClassExperiment: string;
   reflectionPrompt: string;
 };
+
+export type ClassPlan = {
+  title: string;
+  summary: string;
+  sequence: Array<{ phase: string; pose: string; time: string; durationMinutes: number; rounds: string; transition: string; purpose: string }>;
+  keyPoses: Array<{ pose: string; why: string; setup: string[]; cues: string[]; options: string[] }>;
+  studentConsiderations: Array<{ student: string; concern: string; avoid: string; alternatives: string[] }>;
+  rationale: string;
+  safety: string[];
+  cues: string[];
+  preparation: string[];
+};

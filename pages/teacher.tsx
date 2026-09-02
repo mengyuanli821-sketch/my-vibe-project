@@ -1,9 +1,10 @@
 import Head from "next/head";
+import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useState, type CSSProperties } from "react";
 import { FormField, MultiSelect, RatingSelector, TextArea, TextInput } from "@/components/FormField";
 import { Layout } from "@/components/Layout";
 import { toggleSelection } from "@/lib/options";
-import { EMPTY_TEACHER_PROFILE } from "@/lib/teacherProfile";
+import { EMPTY_TEACHER_PROFILE } from "@/lib/teacherConstants";
 import type { TeacherAdvice, TeacherProfile } from "@/types/teacher";
 
 const STYLES = ["Hatha", "Vinyasa", "Yin", "Restorative", "Power", "Barre", "Private sessions"];
@@ -62,8 +63,10 @@ export default function TeacherStudioPage() {
   ];
 
   return (
-    <Layout title="Teacher Studio" action={<button className="premium-button" disabled={saving} form="teacher-profile" type="submit">{saving ? "Saving…" : "Save & refresh coach"}</button>}>
+    <Layout title="Teacher Studio" action={<div className="flex flex-wrap gap-2"><Link className="rounded-full border border-[#cec5b7] bg-white/75 px-4 py-2.5 text-sm font-medium text-stone-600 hover:bg-white" href="/teacher/planner">Open AI Class Planner</Link><button className="premium-button" disabled={saving} form="teacher-profile" type="submit">{saving ? "Saving…" : "Save & refresh coach"}</button></div>}>
       <Head><title>Teacher Studio | Sattva</title></Head>
+
+      <div className="teacher-tabs" aria-label="Teacher workspace sections"><Link className="teacher-tab-active" href="/teacher">Capability profile</Link><Link href="/teacher/planner">AI Class Planner</Link></div>
 
       <section className="teacher-hero">
         <div><p className="eyebrow">Your teaching practice</p><h2 className="mt-3 max-w-2xl font-serif text-3xl text-white sm:text-5xl">The teacher is part of the practice, too.</h2><p className="mt-4 max-w-xl text-sm leading-relaxed text-white/65">Name what feels natural, notice the edge you are growing into, and turn reflection into one observable experiment.</p></div>
