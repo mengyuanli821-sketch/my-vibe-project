@@ -92,8 +92,10 @@ export default function StudentsPage() {
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
 
       {!isLoading && !error ? (
-        <div className="overflow-hidden rounded-2xl border border-[#ddd5c8] bg-white/90 shadow-[0_12px_40px_rgba(57,71,61,0.04)]">
-          <table className="w-full min-w-[1020px] border-collapse text-left text-sm">
+        <div className="student-table-shell">
+          <div aria-hidden="true" className="student-table-swipe-hint"><span>↔</span> Swipe to see all columns</div>
+          <div aria-label="Scrollable student directory" className="student-table-scroll" role="region" tabIndex={0}>
+          <table className="student-directory-table">
             <thead className="bg-[#f1eee7] text-xs uppercase tracking-wide text-stone-600">
               <tr>
                 <th className="px-4 py-3 font-semibold">Name</th>
@@ -125,6 +127,7 @@ export default function StudentsPage() {
               ))}
             </tbody>
           </table>
+          </div>
 
           {filteredStudents.length === 0 ? (
             <div className="border-t border-stone-100 px-4 py-6 text-sm text-stone-600">No students found.</div>

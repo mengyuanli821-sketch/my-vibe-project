@@ -1,8 +1,11 @@
+import { useI18n } from "@/lib/i18n";
+
 type YogaLogoProps = {
   compact?: boolean;
 };
 
 export function YogaLogo({ compact = false }: YogaLogoProps) {
+  const { t } = useI18n();
   return (
     <div className="flex items-center gap-3">
       <svg aria-hidden="true" className="h-11 w-11 shrink-0" viewBox="0 0 64 64">
@@ -21,7 +24,7 @@ export function YogaLogo({ compact = false }: YogaLogoProps) {
       {!compact ? (
         <span className="grid leading-none">
           <span className="font-serif text-lg font-semibold tracking-wide text-[#294a3c]">Sattva</span>
-          <span className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">Student sanctuary</span>
+          <span className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">{t("Student sanctuary")}</span>
         </span>
       ) : null}
     </div>
