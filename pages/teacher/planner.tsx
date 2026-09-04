@@ -1,96 +1,82 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { ClassStatusLight } from "@/components/ClassStatusLight";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FormField, TextArea, TextInput } from "@/components/FormField";
 import { Layout } from "@/components/Layout";
 import { PoseIllustration } from "@/components/PoseIllustration";
-import { getClassStatus } from "@/lib/classStatus";
+import { POSE_LIBRARY } from "@/lib/poseLibrary";
 import { splitSelections, toggleSelection } from "@/lib/options";
-import { useI18n } from "@/lib/i18n";
-import type { ClassNote, StudentWithStats } from "@/types/student";
-import type { ClassPlan } from "@/types/teacher";
+import type { StudentWithStats } from "@/types/student";
 
-const EMPTY_PLAN: ClassPlan = { title: "", summary: "", sequence: [], keyPoses: [], studentConsiderations: [], rationale: "", safety: [], cues: [], preparation: [] };
+type SequenceSettings = Record<string, { minutes: number; phase: string; note: string }>;
+const PHASES = ["進入課堂", "暖身準備", "主要探索", "緩和整合", "休息"];
 
-export default function AIClassPlannerPage() {
-  const { locale } = useI18n();
+export default function ClassPlannerPage() {
   const [students, setStudents] = useState<StudentWithStats[]>([]);
   const [studentIds, setStudentIds] = useState<string[]>([]);
-  const [notes, setNotes] = useState<ClassNote[]>([]);
+  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  const [sequence, setSequence] = useState<string[]>([]);
+  const [settings, setSettings] = useState<SequenceSettings>({});
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
   const [theme, setTheme] = useState("");
-  const [difficulty, setDifficulty] = useState("3");
   const [duration, setDuration] = useState("60");
-  const [newStudents, setNewStudents] = useState("0");
+  const [classStyle, setClassStyle] = useState("Hatha");
   const [props, setProps] = useState("");
   const [intention, setIntention] = useState("");
-  const [classStyle, setClassStyle] = useState("Vinyasa");
-  const [pace, setPace] = useState("Balanced");
-  const [mustInclude, setMustInclude] = useState("");
-  const [avoidPoses, setAvoidPoses] = useState("");
-  const [plan, setPlan] = useState<ClassPlan>(EMPTY_PLAN);
-  const [source, setSource] = useState<"idle" | "ai" | "adaptive">("idle");
-  const [sourceReason, setSourceReason] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState("");
-  const [expandedPose, setExpandedPose] = useState<number | null>(null);
-  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
   const studentPickerRef = useRef<HTMLDivElement>(null);
-  const variationRef = useRef(0);
 
-  useEffect(() => { fetch("/api/students").then((response) => response.json()).then((data) => { setStudents(data.students ?? []); if (data.students?.[0]) setStudentIds([data.students[0].id]); }).catch(() => setError("Could not load students")); }, []);
-  useEffect(() => { if (!studentIds.length) { setNotes([]); return; } Promise.all(studentIds.map((id) => fetch(`/api/class-notes?student_id=${id}`).then((response) => response.json()))).then((results) => setNotes(results.flatMap((data) => data.classNotes ?? []).sort((a, b) => `${b.class_date}T${b.class_time || "00:00"}`.localeCompare(`${a.class_date}T${a.class_time || "00:00"}`)))).catch(() => setNotes([])); }, [studentIds]);
   useEffect(() => {
-    function closePicker(event: PointerEvent) { if (!studentPickerRef.current?.contains(event.target as Node)) setStudentPickerOpen(false); }
-    function closeOnEscape(event: KeyboardEvent) { if (event.key === "Escape") setStudentPickerOpen(false); }
-    document.addEventListener("pointerdown", closePicker);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => { document.removeEventListener("pointerdown", closePicker); document.removeEventListener("keydown", closeOnEscape); };
+    fetch("/api/students").then((response) => response.json()).then((data) => setStudents(data.students ?? [])).catch(() => setStudents([]));
+    try {
+      setSequence(JSON.parse(window.localStorage.getItem("sattva-pose-shortlist") || "[]"));
+      const draft = JSON.parse(window.localStorage.getItem("sattva-class-draft") || "{}");
+      if (draft.title) setTitle(draft.title); if (draft.theme) setTheme(draft.theme); if (draft.duration) setDuration(draft.duration);
+      if (draft.classStyle) setClassStyle(draft.classStyle); if (draft.props) setProps(draft.props); if (draft.intention) setIntention(draft.intention);
+      if (draft.studentIds) setStudentIds(draft.studentIds); if (draft.settings) setSettings(draft.settings);
+    } catch { /* Keep a clean draft if stored data is malformed. */ }
   }, []);
 
+  useEffect(() => {
+    function closePicker(event: PointerEvent) { if (!studentPickerRef.current?.contains(event.target as Node)) setStudentPickerOpen(false); }
+    document.addEventListener("pointerdown", closePicker);
+    return () => document.removeEventListener("pointerdown", closePicker);
+  }, []);
+  useEffect(() => { window.localStorage.setItem("sattva-pose-shortlist", JSON.stringify(sequence)); }, [sequence]);
+
   const selectedStudents = students.filter((student) => studentIds.includes(student.id));
-  const latest = notes[0];
+  const poses = useMemo(() => sequence.map((id) => POSE_LIBRARY.find((pose) => pose.id === id)).filter((pose): pose is (typeof POSE_LIBRARY)[number] => Boolean(pose)), [sequence]);
+  const plannedMinutes = poses.reduce((total, pose) => total + (settings[pose.id]?.minutes ?? 3), 0);
 
-  async function generatePlan() {
-    if (!studentIds.length) { setError("Select at least one student first"); return; }
-    setIsGenerating(true); setError("");
-    try {
-      variationRef.current = (variationRef.current + 1) % 4;
-      const response = await fetch("/api/class-planner", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ student_ids: studentIds, theme, difficulty: Number(difficulty), duration: Number(duration), new_students: Number(newStudents), props, intention, class_style: classStyle, pace, must_include: mustInclude, avoid_poses: avoidPoses, variation_key: variationRef.current, locale }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not generate plan");
-      setPlan(data.plan); setSource(data.source === "ai" ? "ai" : "adaptive"); setSourceReason(data.sourceReason || ""); setExpandedPose(0);
-    } catch (generationError) { setError(generationError instanceof Error ? generationError.message : "Could not generate plan"); }
-    finally { setIsGenerating(false); }
-  }
+  function updatePose(id: string, patch: Partial<SequenceSettings[string]>) { setSettings((current) => { const existing = current[id] ?? { minutes: 3, phase: "主要探索", note: "" }; return { ...current, [id]: { ...existing, ...patch } }; }); setSaved(false); }
+  function movePose(id: string, targetId: string) { if (id === targetId) return; setSequence((current) => { const next = [...current]; const from = next.indexOf(id); const to = next.indexOf(targetId); if (from < 0 || to < 0) return current; next.splice(from, 1); next.splice(to, 0, id); return next; }); setSaved(false); }
+  function nudgePose(id: string, direction: -1 | 1) { setSequence((current) => { const from = current.indexOf(id); const to = from + direction; if (from < 0 || to < 0 || to >= current.length) return current; const next = [...current]; [next[from], next[to]] = [next[to], next[from]]; return next; }); setSaved(false); }
+  function removePose(id: string) { setSequence((current) => current.filter((item) => item !== id)); setSaved(false); }
+  function saveDraft() { window.localStorage.setItem("sattva-class-draft", JSON.stringify({ title, theme, duration, classStyle, props, intention, studentIds, settings })); window.localStorage.setItem("sattva-pose-shortlist", JSON.stringify(sequence)); setSaved(true); }
 
-  return (
-    <Layout title="AI Class Planner" action={<Link className="premium-button inline-flex" href="/teacher">← Teacher Studio</Link>}>
-      <Head><title>AI Class Planner | Sattva</title></Head>
-      <div className="teacher-tabs"><Link href="/teacher">Capability profile</Link><Link className="teacher-tab-active" href="/teacher/planner">AI Class Planner</Link><Link href="/teacher/toolkit">Teaching Toolkit</Link></div>
-
-      <section className="planner-intro"><div><p className="eyebrow">Teacher Studio · pre-class ritual</p><h2 className="mt-2 font-serif text-3xl text-[#294a3c] sm:text-4xl">Shape the room before it opens.</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-600">Select students, add the practical context and let the planner turn history into a connected, teachable arc. Review every suggestion before class.</p></div><span className="planner-sanskrit">krama<br /><small>one step at a time</small></span></section>
-
-      <div className="planner-workspace mt-6">
-        <section className="planner-form-card">
-          <div className="mb-5 flex items-center justify-between"><div><p className="eyebrow">01 · Context</p><h2 className="mt-1 font-serif text-2xl text-[#294a3c]">Today’s container</h2></div><span className={`planner-source-badge ${source === "ai" ? "planner-source-ai" : source === "adaptive" ? "planner-source-template" : ""}`}>{source === "ai" ? "AI generated" : source === "adaptive" ? "Template fallback" : "Awaiting brief"}</span></div>
-          <div className="grid gap-4"><FormField label="Students" hint="Open the selection box to choose one or more students."><div className={`student-select ${studentPickerOpen ? "student-select-open" : ""}`} ref={studentPickerRef}><button aria-expanded={studentPickerOpen} aria-haspopup="listbox" className="student-select-trigger" onClick={() => setStudentPickerOpen((open) => !open)} type="button"><span>{selectedStudents.length ? <>{selectedStudents.slice(0, 2).map((student) => <i key={student.id}>{student.name}</i>)}{selectedStudents.length > 2 ? <i>+{selectedStudents.length - 2}</i> : null}</> : <em>Select students…</em>}</span><b>{selectedStudents.length ? `${selectedStudents.length} selected` : "Required"}<i aria-hidden="true">⌄</i></b></button>{studentPickerOpen ? <div aria-label="Students" className="student-select-menu" role="listbox">{students.map((student) => { const isSelected = studentIds.includes(student.id); return <button aria-selected={isSelected} className={`planner-student-option ${isSelected ? "planner-student-option-selected" : ""}`} key={student.id} onClick={() => setStudentIds((current) => splitSelections(toggleSelection(current.join(", "), student.id)))} role="option" type="button"><span className="planner-check">{isSelected ? "✓" : "+"}</span><span><strong>{student.name}</strong><small>{student.class_count} classes · {student.experience_level || "Level not set"}</small></span></button>; })}</div> : null}</div></FormField><div className="grid gap-4 sm:grid-cols-2"><FormField hint="Required" label="Class style"><select className="form-control" onChange={(event) => setClassStyle(event.target.value)} value={classStyle}><option>Vinyasa</option><option>Hatha</option><option>Yin</option><option>Restorative</option><option>Mixed practice</option></select></FormField><FormField hint="Required" label="Pace"><select className="form-control" onChange={(event) => setPace(event.target.value)} value={pace}><option>Slow</option><option>Balanced</option><option>Dynamic</option></select></FormField></div><div className="grid gap-4 sm:grid-cols-2"><FormField hint="Be specific" label="Class theme"><TextInput name="theme" onChange={(event) => setTheme(event.target.value)} placeholder="Hip mobility with steady strength…" value={theme} /></FormField><FormField label="Duration"><select className="form-control" onChange={(event) => setDuration(event.target.value)} value={duration}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="75">75 minutes</option><option value="90">90 minutes</option></select></FormField></div><div className="grid gap-4 sm:grid-cols-2"><FormField label="New students"><TextInput name="new_students" onChange={(event) => setNewStudents(event.target.value)} type="number" value={newStudents} /></FormField><FormField hint="Optional" label="Props / room setup"><TextInput name="props" onChange={(event) => setProps(event.target.value)} placeholder="Chairs, blocks, blankets…" value={props} /></FormField></div><div className="grid gap-4 sm:grid-cols-2"><FormField hint="Optional" label="Must include"><TextInput name="must_include" onChange={(event) => setMustInclude(event.target.value)} placeholder="Tree, breathwork…" value={mustInclude} /></FormField><FormField hint="Optional" label="Avoid poses"><TextInput name="avoid_poses" onChange={(event) => setAvoidPoses(event.target.value)} placeholder="Plank, deep kneeling…" value={avoidPoses} /></FormField></div><FormField hint="How should the room feel or learn?" label="Teacher intention"><TextArea name="intention" onChange={(event) => setIntention(event.target.value)} placeholder="Build confidence through repeated, predictable transitions…" value={intention} /></FormField></div>
-          <div className="mt-6"><FormField label={`Difficulty · ${difficulty}/5`} hint="1 = restorative · 5 = vigorous"><input aria-label="Class difficulty" className="difficulty-range" max="5" min="1" onChange={(event) => setDifficulty(event.target.value)} type="range" value={difficulty} /><div className="mt-2 flex justify-between text-[10px] text-stone-400"><span>Restorative</span><span>Vigorous</span></div></FormField></div>
-
-          {selectedStudents.length ? <div className="planner-student-card"><div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#9b6845]">Selection context</p><h3 className="mt-1 font-serif text-xl text-[#294a3c]">{selectedStudents.length} {selectedStudents.length === 1 ? "student" : "students"} selected</h3></div><ClassStatusLight compact status={latest ? getClassStatus(latest) : selectedStudents[0].last_class_status} /></div><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div><strong>{notes.length}</strong><small>classes read</small></div><div><strong>{latest?.energy_score || "—"}</strong><small>latest energy</small></div><div><strong>{latest?.body_comfort_score || "—"}</strong><small>latest comfort</small></div></div><p className="mt-3 text-xs leading-relaxed text-stone-500">Goals and movement considerations from every selected profile will be included.</p></div> : null}
-
-          {error ? <p aria-live="polite" className="mt-4 rounded-xl bg-[#f8e5df] px-4 py-3 text-sm text-[#925b46]">{error}</p> : null}
-          {sourceReason ? <p className="planner-source-note" role="status"><strong>{source === "ai" ? "AI status" : "Why this is a template"}</strong>{sourceReason}</p> : null}
-          <button className="mt-6 w-full rounded-full bg-[#294a3c] px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-[#1d3329] disabled:opacity-50" disabled={isGenerating || !studentIds.length} onClick={generatePlan} type="button">{isGenerating ? "AI is designing the class…" : "Generate a new AI class plan →"}</button>
-        </section>
-
-        <section className="planner-output-card"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow !text-[#e9bd89]">02 · Generated arc</p><h2 className="mt-2 font-serif text-3xl text-white">{plan.title || "Your sequence will appear here"}</h2></div><span className="text-2xl text-[#d99b6c]">✦</span></div>{plan.summary ? <p className="mt-3 text-sm leading-relaxed text-white/60">{plan.summary}</p> : <p className="mt-4 text-sm leading-relaxed text-white/45">Choose students and context on the left. The planner will combine their history with your teaching intention.</p>}{plan.sequence.length ? <>
-          <div className="plan-proof" aria-label="Plan requirement check"><span><strong>{plan.sequence.reduce((sum, step) => sum + step.durationMinutes, 0)}</strong><small>minutes · matched</small></span><span><strong>{plan.sequence.length}</strong><small>poses / transitions</small></span><span><strong>{difficulty}/5</strong><small>requested level</small></span></div>
-          <ol className="planner-sequence">{plan.sequence.map((step, index) => <li className={expandedPose === index ? "planner-pose-open" : ""} key={`${step.pose}-${index}`}><button aria-expanded={expandedPose === index} onClick={() => setExpandedPose((current) => current === index ? null : index)} type="button"><span>{String(index + 1).padStart(2, "0")}</span><PoseIllustration className="pose-thumbnail" pose={step.pose} /><div><em>{step.phase}</em><strong>{step.pose}</strong><small>{step.time} · {step.rounds}</small></div><i>⌄</i></button>{expandedPose === index ? <div className="pose-inline-detail"><p><b>{step.durationMinutes} minute teaching window · {step.rounds}</b></p><p>{step.purpose}</p><small><b>Transition:</b> {step.transition}</small></div> : null}</li>)}</ol>
-          {plan.studentConsiderations.length ? <section className="student-considerations"><div className="key-pose-heading"><p className="eyebrow !text-[#e9bd89]">Individual considerations</p><span>Profile + class history</span></div>{plan.studentConsiderations.map((item) => <article key={`${item.student}-${item.concern}`}><div><strong>{item.student}</strong><small>{item.concern}</small></div><p><b>Avoid:</b> {item.avoid}</p><p><b>Offer:</b> {item.alternatives.join(" · ")}</p></article>)}</section> : null}
-          {plan.keyPoses.length ? <div className="key-pose-section"><div className="key-pose-heading"><p className="eyebrow !text-[#e9bd89]">Key pose teaching notes</p><span>{plan.keyPoses.length} focus {plan.keyPoses.length === 1 ? "pose" : "poses"}</span></div><div className="grid gap-3 sm:grid-cols-2">{plan.keyPoses.map((focus) => <article className="key-pose-card" key={focus.pose}><PoseIllustration className="key-pose-visual" pose={focus.pose} /><h3>{focus.pose}</h3><p>{focus.why}</p><details open><summary>How to teach it</summary><ol>{focus.setup.map((item) => <li key={item}>{item}</li>)}</ol></details><details><summary>Cues & options</summary><ul>{focus.cues.map((item) => <li key={item}>“{item}”</li>)}{focus.options.map((item) => <li key={item}>{item}</li>)}</ul></details></article>)}</div></div> : null}
-          <details className="planner-details" open><summary>Why this order</summary><p>{plan.rationale}</p></details><details className="planner-details"><summary>Prepare the room</summary><ul>{plan.preparation.map((item) => <li key={item}>{item}</li>)}</ul></details><details className="planner-details"><summary>Safety + language</summary><div className="grid gap-3 sm:grid-cols-2"><ul>{plan.safety.map((item) => <li key={item}>{item}</li>)}</ul><ul>{plan.cues.map((item) => <li key={item}>“{item}”</li>)}</ul></div></details></> : null}</section>
-      </div>
-    </Layout>
-  );
+  return <Layout title="課程編排" action={<Link className="premium-button inline-flex" href="/teacher/toolkit">＋ 從體式庫加入</Link>}>
+    <Head><title>課程編排 | Sattva</title></Head>
+    <div className="teacher-tabs"><Link href="/teacher">Capability profile</Link><Link className="teacher-tab-active" href="/teacher/planner">課程編排</Link><Link href="/teacher/toolkit">Teaching Toolkit</Link></div>
+    <section className="planner-intro"><div><p className="eyebrow">Teacher-led sequencing</p><h2 className="mt-2 font-serif text-3xl text-[#294a3c] sm:text-4xl">把備選體式，排成一堂完整的課。</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-600">從體式庫加入動作，依教學判斷安排順序、階段、時間與個別口令。草稿只保存在這台裝置。</p></div><span className="planner-sanskrit">krama<br /><small>one step at a time</small></span></section>
+    <div className="planner-workspace mt-6">
+      <section className="planner-form-card">
+        <div className="mb-5 flex items-center justify-between"><div><p className="eyebrow">01 · Class context</p><h2 className="mt-1 font-serif text-2xl text-[#294a3c]">課堂設定</h2></div><span className="planner-source-badge">手動草稿</span></div>
+        <div className="grid gap-4">
+          <FormField label="課程名稱" hint="選填"><TextInput name="title" onChange={(event) => { setTitle(event.target.value); setSaved(false); }} placeholder="例如：穩定根基與髖部流動" value={title} /></FormField>
+          <FormField label="學員" hint="可選擇一位或多位學員"><div className={`student-select ${studentPickerOpen ? "student-select-open" : ""}`} ref={studentPickerRef}><button aria-expanded={studentPickerOpen} className="student-select-trigger" onClick={() => setStudentPickerOpen((open) => !open)} type="button"><span>{selectedStudents.length ? selectedStudents.map((student) => <i key={student.id}>{student.name}</i>) : <em>選擇學員…</em>}</span><b>{selectedStudents.length ? `已選 ${selectedStudents.length} 位` : "選填"}<i aria-hidden="true">⌄</i></b></button>{studentPickerOpen ? <div className="student-select-menu" role="listbox">{students.map((student) => { const selected = studentIds.includes(student.id); return <button aria-selected={selected} className={`planner-student-option ${selected ? "planner-student-option-selected" : ""}`} key={student.id} onClick={() => { setStudentIds((current) => splitSelections(toggleSelection(current.join(", "), student.id))); setSaved(false); }} role="option" type="button"><span className="planner-check">{selected ? "✓" : "+"}</span><span><strong>{student.name}</strong><small>{student.experience_level || "程度未設定"} · {student.class_count} 堂課</small></span></button>; })}</div> : null}</div></FormField>
+          <div className="grid gap-4 sm:grid-cols-2"><FormField label="課程類型"><select className="form-control" onChange={(event) => { setClassStyle(event.target.value); setSaved(false); }} value={classStyle}><option>Hatha</option><option>Vinyasa</option><option>Ashtanga</option><option>Iyengar</option><option>Yin</option><option>Restorative</option></select></FormField><FormField label="預計時長"><select className="form-control" onChange={(event) => { setDuration(event.target.value); setSaved(false); }} value={duration}><option value="30">30 分鐘</option><option value="45">45 分鐘</option><option value="60">60 分鐘</option><option value="75">75 分鐘</option><option value="90">90 分鐘</option></select></FormField></div>
+          <FormField label="課程主題"><TextInput name="theme" onChange={(event) => { setTheme(event.target.value); setSaved(false); }} placeholder="例如：平衡、肩頸放鬆、腿後側" value={theme} /></FormField>
+          <FormField label="輔具與空間"><TextInput name="props" onChange={(event) => { setProps(event.target.value); setSaved(false); }} placeholder="瑜伽磚、椅子、毛毯…" value={props} /></FormField>
+          <FormField label="老師意圖／全班提醒"><TextArea name="intention" onChange={(event) => { setIntention(event.target.value); setSaved(false); }} placeholder="這堂課希望學員探索什麼？" value={intention} /></FormField>
+        </div>
+        <button className="mt-6 w-full rounded-full bg-[#294a3c] px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-[#1d3329]" onClick={saveDraft} type="button">{saved ? "✓ 草稿已儲存" : "儲存課程草稿"}</button>
+      </section>
+      <section className="planner-output-card manual-planner-output">
+        <div className="manual-plan-heading"><div><p className="eyebrow !text-[#e9bd89]">02 · Sequence</p><h2>{title || "未命名課程"}</h2><p>{theme || "拖曳體式以安排教學順序"}</p></div><div className={`manual-time-total ${plannedMinutes > Number(duration) ? "manual-time-over" : ""}`}><strong>{plannedMinutes}</strong><span>／{duration} 分鐘</span></div></div>
+        {poses.length ? <ol className="manual-sequence-list">{poses.map((pose, index) => { const item = settings[pose.id] ?? { minutes: 3, phase: "主要探索", note: "" }; return <li className={dragged === pose.id ? "manual-pose-dragging" : ""} draggable key={pose.id} onDragEnd={() => setDragged(null)} onDragOver={(event) => event.preventDefault()} onDragStart={() => setDragged(pose.id)} onDrop={() => { if (dragged) movePose(dragged, pose.id); setDragged(null); }}><div className="manual-pose-main"><span className="manual-drag">⠿</span><b>{String(index + 1).padStart(2, "0")}</b><PoseIllustration pose={`${pose.en} ${pose.zh}`} /><div><strong>{pose.zh}</strong><small>{pose.en} · {pose.position} · {pose.level}</small></div><div className="manual-pose-actions"><button aria-label="上移" disabled={index === 0} onClick={() => nudgePose(pose.id, -1)} type="button">↑</button><button aria-label="下移" disabled={index === poses.length - 1} onClick={() => nudgePose(pose.id, 1)} type="button">↓</button><button aria-label="移除" onClick={() => removePose(pose.id)} type="button">×</button></div></div><div className="manual-pose-fields"><label>階段<select onChange={(event) => updatePose(pose.id, { phase: event.target.value })} value={item.phase}>{PHASES.map((phase) => <option key={phase}>{phase}</option>)}</select></label><label>分鐘<input min="1" onChange={(event) => updatePose(pose.id, { minutes: Math.max(1, Number(event.target.value)) })} type="number" value={item.minutes} /></label><label>教學備註<input onChange={(event) => updatePose(pose.id, { note: event.target.value })} placeholder="口令、左右次數或替代方案…" value={item.note} /></label></div></li>; })}</ol> : <div className="manual-plan-empty"><span>＋</span><h3>尚未加入體式</h3><p>前往教學工具箱搜尋體式並加入備選，體式會自動出現在這裡。</p><Link href="/teacher/toolkit">打開體式資料庫 →</Link></div>}
+        {poses.length ? <div className="manual-plan-footer"><p>共 <strong>{poses.length}</strong> 個體式 · 已安排 <strong>{plannedMinutes}</strong> 分鐘</p><Link href="/teacher/toolkit">＋ 繼續加入體式</Link></div> : null}
+      </section>
+    </div>
+  </Layout>;
 }
