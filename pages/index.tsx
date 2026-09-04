@@ -2,6 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
+import { MeditationPlayer } from "@/components/MeditationPlayer";
 import { TeachingFlowVisual } from "@/components/TeachingFlowVisual";
 import type { StudentWithStats } from "@/types/student";
 
@@ -43,6 +44,8 @@ export default function HomePage() {
         </div>
         <TeachingFlowVisual />
       </section>
+
+      <MeditationPlayer />
 
       <section className="mt-12">
         <div className="mb-5 flex items-end justify-between gap-4">

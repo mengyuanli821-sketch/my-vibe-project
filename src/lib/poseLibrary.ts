@@ -231,7 +231,16 @@ const POSITION_GUIDANCE: Record<PosePosition, Pick<PoseGuide, "enter" | "exit" |
 
 function completePose(pose: ExtraPose): PoseGuide {
   const guide = POSITION_GUIDANCE[pose.position];
-  return { ...guide, traditions: ["哈達"], source: { label: "Yoga Journal · Pose library", url: YJ }, ...pose };
+  const tailored = {
+    enter: [
+      `先建立穩定的${pose.position}起始位置，準備進入${pose.zh}（${pose.sanskrit}）。`,
+      `${pose.summary} 依自己的活動範圍逐步完成動作，不以末端幅度為目標。`,
+      `停留時依序檢查${pose.focus.join("、")}，確認呼吸仍然連續。`
+    ],
+    exit: `先減少${pose.zh}的動作幅度，穩定支撐點與視線，再循原路回到中立位置。`,
+    cues: [`在${pose.focus[0]}建立穩定，再延伸${pose.focus[1] ?? "脊柱"}。`, `保持能順暢呼吸與退出的${pose.zh}版本。`]
+  };
+  return { ...guide, ...tailored, traditions: ["哈達"], source: { label: "Yoga Journal · Pose library", url: YJ }, ...pose };
 }
 
 const ASHTANGA = { label: "Ashtanga Primary Series · complete guide", url: "https://ashtanga.yoga/primary-series" };
@@ -286,7 +295,26 @@ const ADDITIONAL_POSES: PoseGuide[] = [
   completePose({ id: "headstand", zh: "頭倒立式", en: "Supported Headstand", sanskrit: "Salamba Sirsasana", position: "手臂支撐", level: "進階", focus: ["肩帶穩定", "核心", "平衡"], tags: ["倒置", "平衡", "進階", "Ashtanga"], summary: "以前臂、頭部與肩帶共同建立的倒置，必須先具備充分支撐能力。", cautions: ["頸椎、肩部、高血壓、青光眼、骨質疏鬆或其他倒置禁忌者避免。", "不適合自行嘗試；需由合格老師評估並指導。"], traditions: ["Ashtanga", "愛揚格"], source: ASHTANGA }),
   completePose({ id: "handstand", zh: "手倒立式", en: "Handstand", sanskrit: "Adho Mukha Vrksasana", position: "手臂支撐", level: "進階", focus: ["肩部", "手臂", "核心"], tags: ["倒置", "手臂平衡", "平衡", "進階"], summary: "以雙手為基底的全身倒置，要求腕肩承重、核心控制與安全落地能力。", cautions: ["腕、肩、頸部症狀，高血壓、青光眼或其他倒置禁忌者避免。", "只在專業指導與安全空間中練習，不以踢牆代替控制。"], traditions: ["愛揚格", "Ashtanga"], source: IYENGAR }),
   completePose({ id: "upward-plank", zh: "反平板式", en: "Upward Plank", sanskrit: "Purvottanasana", position: "手臂支撐", level: "中階", focus: ["後鏈", "手臂", "胸部"], tags: ["強化", "後彎", "手臂支撐", "Ashtanga"], summary: "手腳支撐並向上抬起身體前側，強化後鏈並延展胸肩。", traditions: ["Ashtanga", "愛揚格"], source: ASHTANGA }),
-  completePose({ id: "firefly", zh: "螢火蟲式", en: "Firefly Pose", sanskrit: "Tittibhasana", position: "手臂支撐", level: "進階", focus: ["手臂", "核心", "腿後側"], tags: ["手臂平衡", "強化", "平衡", "進階"], summary: "雙腿伸展越過上臂的高階平衡，需要髖部活動、手臂推力與核心整合。", traditions: ["Ashtanga"], source: ASHTANGA })
+  completePose({ id: "firefly", zh: "螢火蟲式", en: "Firefly Pose", sanskrit: "Tittibhasana", position: "手臂支撐", level: "進階", focus: ["手臂", "核心", "腿後側"], tags: ["手臂平衡", "強化", "平衡", "進階"], summary: "雙腿伸展越過上臂的高階平衡，需要髖部活動、手臂推力與核心整合。", traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "half-split", zh: "半神猴式", en: "Half Split", sanskrit: "Ardha Hanumanasana", position: "跪姿", level: "基礎", focus: ["腿後側", "小腿", "髖部"], tags: ["伸展", "腿後側", "弓步", "準備"], summary: "由低弓步將骨盆後移、前腿逐步伸直，以長脊柱探索前腿後側。" }),
+  completePose({ id: "lizard", zh: "蜥蜴式", en: "Lizard Pose", sanskrit: "Utthan Pristhasana", position: "跪姿", level: "中階", focus: ["髖部", "髖屈肌", "內收肌"], tags: ["伸展", "髖部", "弓步"], summary: "前腳置於同側手外的低弓步，可用瑜伽磚墊高手部，逐步探索髖前與大腿內側。" }),
+  completePose({ id: "pigeon", zh: "鴿子式", en: "Pigeon Pose", sanskrit: "Eka Pada Rajakapotasana Prep", position: "跪姿", level: "中階", focus: ["外側髖", "臀部", "髖屈肌"], tags: ["伸展", "髖部", "單腿"], summary: "前腿外旋、後腿延伸的髖部體式；前腳跟可貼近骨盆，骨盆下方應充分支撐。", cautions: ["膝或髖部疼痛時不要勉強進入，改做仰臥四字式。", "骨盆懸空時以毛毯或瑜伽磚支撐。"] }),
+  completePose({ id: "side-plank", zh: "側板式", en: "Side Plank", sanskrit: "Vasisthasana", position: "手臂支撐", level: "中階", focus: ["側腹核心", "肩胛穩定", "平衡"], tags: ["強化", "核心", "手臂支撐", "平衡"], summary: "由平板轉向單手與單腳側邊支撐，可讓下側膝著地以降低負荷。" }),
+  completePose({ id: "wheel", zh: "輪式", en: "Wheel Pose", sanskrit: "Urdhva Dhanurasana", position: "仰臥", level: "進階", focus: ["胸椎伸展", "肩部", "腿部力量"], tags: ["後彎", "強化", "開胸", "進階"], summary: "手腳推地的完整後彎，需要肩部活動、腿部推力與均勻的脊柱伸展。", cautions: ["腕、肩、頸或腰部不適者避免，先使用橋式。", "需充分熱身並在合格老師指導下練習。"] }),
+  completePose({ id: "figure-four", zh: "仰臥四字式", en: "Reclined Figure Four", sanskrit: "Supta Kapotasana", position: "仰臥", level: "基礎", focus: ["外側髖", "臀部", "下背"], tags: ["伸展", "髖部", "恢復", "仰臥"], summary: "仰臥將一側腳踝跨過另一側大腿，雙手抱腿靠近，在地面支撐下探索外側髖。" }),
+  completePose({ id: "constructive-rest", zh: "建設性休息式", en: "Constructive Rest", sanskrit: "—", position: "仰臥", level: "基礎", focus: ["呼吸", "下背", "骨盆覺察"], tags: ["恢復", "呼吸", "暖身", "仰臥"], summary: "仰臥屈膝、雙腳踩地，讓骨盆與背部被地面承接，適合課堂開始時觀察呼吸與症狀。" }),
+  completePose({ id: "seated-side-bend", zh: "坐姿側彎", en: "Seated Side Bend", sanskrit: "Parsva Sukhasana", position: "坐姿", level: "基礎", focus: ["側腰", "胸廓", "肩部"], tags: ["側彎", "伸展", "呼吸", "坐姿"], summary: "穩定坐骨後將一手落地、另一手越過耳側延伸，以呼吸探索側腰與胸廓空間。" }),
+  completePose({ id: "big-toe", zh: "站立手抓大腳趾式", en: "Big Toe Pose", sanskrit: "Padangusthasana", position: "站姿", level: "基礎", focus: ["腿後側", "小腿", "髖部折疊"], tags: ["前屈", "伸展", "站立", "Ashtanga"], summary: "雙腳髖寬，從髖部向前折疊，以食指與中指勾住大腳趾；可屈膝保持腹部與大腿靠近。", traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "hand-under-foot", zh: "手掌墊腳式", en: "Hand Under Foot Pose", sanskrit: "Padahastasana", position: "站姿", level: "中階", focus: ["腿後側", "手腕", "背部"], tags: ["前屈", "伸展", "站立", "Ashtanga"], summary: "站立前屈後將手掌滑到腳底下、腳趾靠近腕橫紋；先放鬆頸部，再逐步伸展雙腿。", traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "high-lunge", zh: "高弓步", en: "High Lunge", sanskrit: "Ashta Chandrasana", position: "站姿", level: "基礎", focus: ["腿部力量", "髖屈肌", "平衡"], tags: ["弓步", "強化", "站立", "髖部"], summary: "前膝屈曲、後腳跟抬起，後腿保持延伸；軀幹從骨盆向上延長，手可扶髖或舉高。", source: { label: "Yoga Journal · Standing poses", url: "https://www.yogajournal.com/poses/types/standing/" } }),
+  completePose({ id: "revolved-side-angle", zh: "扭轉側角式", en: "Revolved Side Angle", sanskrit: "Parivrtta Parsvakonasana", position: "站姿", level: "中階", focus: ["胸椎旋轉", "腿部力量", "平衡"], tags: ["扭轉", "弓步", "站立", "核心"], summary: "從弓步延長脊柱，再讓軀幹朝前腿旋轉；下手可放瑜伽磚，先保持後膝著地以建立穩定。", source: { label: "Yoga Journal · Standing poses", url: "https://www.yogajournal.com/poses/types/standing/" } }),
+  completePose({ id: "revolved-head-to-knee", zh: "扭轉頭碰膝式", en: "Revolved Head-to-Knee Pose", sanskrit: "Parivrtta Janu Sirsasana", position: "坐姿", level: "中階", focus: ["側腰", "腿後側", "胸椎旋轉"], tags: ["側彎", "扭轉", "坐姿", "伸展"], summary: "一腿伸直、一腿屈曲，軀幹側彎朝伸直腿並把胸口逐步轉向上方；下手可扶小腿或瑜伽帶。", source: { label: "Yoga Journal · Pose library", url: "https://www.yogajournal.com/poses/" } }),
+  completePose({ id: "marichyasana-a", zh: "聖哲瑪里琪一式", en: "Marichi’s Pose A", sanskrit: "Marichyasana A", position: "坐姿", level: "中階", focus: ["腿後側", "髖部", "肩部"], tags: ["前屈", "坐姿", "單腿", "Ashtanga"], summary: "一腿伸直、另一膝屈曲踩地，軀幹向伸直腿前屈；手臂可環抱屈膝腿，無需強求背後扣手。", traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "half-frog", zh: "半青蛙式", en: "Half Frog Pose", sanskrit: "Ardha Bhekasana", position: "俯臥", level: "中階", focus: ["股四頭肌", "髖屈肌", "胸部"], tags: ["後彎", "伸展", "俯臥", "單腿"], summary: "俯臥以前臂支撐胸口，屈一膝並由同側手扶腳；保持膝蓋朝後，腳跟只靠近舒適範圍。", source: { label: "Yoga Journal · Leg poses", url: "https://www.yogajournal.com/poses/anatomy/legs/" } }),
+  completePose({ id: "peacock", zh: "孔雀式", en: "Peacock Pose", sanskrit: "Mayurasana", position: "手臂支撐", level: "進階", focus: ["手腕", "手臂", "核心"], tags: ["手臂平衡", "強化", "核心", "進階"], summary: "雙肘靠近腹部、身體水平離地的進階平衡；先以腳尖留地練習前移重心與手掌推力。", cautions: ["腕、肘、肩或腹部狀況者避免。", "需在合格老師指導與安全落地空間中練習。"], source: { label: "Yoga Journal · Leg poses", url: "https://www.yogajournal.com/poses/anatomy/legs/" } }),
+  completePose({ id: "ear-pressure", zh: "耳壓式", en: "Ear Pressure Pose", sanskrit: "Karnapidasana", position: "仰臥", level: "進階", focus: ["背部", "肩部", "腿後側"], tags: ["倒置", "前屈", "Ashtanga", "進階"], summary: "由犁式屈膝，膝蓋靠近耳朵兩側；重量留在肩背而非頸椎，手臂保持支撐。", cautions: ["頸肩、高血壓、青光眼或其他倒置禁忌者避免。", "不可在姿勢中轉頭，初學者需由合格老師指導。"], traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "yoga-seal", zh: "瑜伽身印", en: "Yoga Seal", sanskrit: "Yoga Mudrasana", position: "坐姿", level: "中階", focus: ["髖部", "背部", "肩部"], tags: ["前屈", "冥想", "坐姿", "Ashtanga"], summary: "在舒適交叉坐姿中延長脊柱後前屈，雙手可留在地面；蓮花坐與背後扣手只適合已有充分活動度者。", traditions: ["Ashtanga"], source: ASHTANGA }),
+  completePose({ id: "extended-leg", zh: "伸腿式", en: "Extended Leg Pose", sanskrit: "Uttana Padasana", position: "仰臥", level: "中階", focus: ["核心", "髖屈肌", "胸部"], tags: ["強化", "仰臥", "核心", "Ashtanga"], summary: "由有支撐的胸椎伸展抬起雙腿與手臂，保持腹部控制；可讓頭背完整著地並一次抬一腿。", traditions: ["Ashtanga"], source: ASHTANGA })
 ];
 
 export const POSE_LIBRARY: PoseGuide[] = [...CORE_POSES, ...ADDITIONAL_POSES];

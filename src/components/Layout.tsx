@@ -17,7 +17,8 @@ const NAVIGATION = [
   { label: "Teaching", icon: "teacher", items: [
     { href: "/teacher", label: "Teacher Studio", description: "Profile & coaching", icon: "studio" },
     { href: "/teacher/planner", label: "Class Planner", description: "Build a timed sequence", icon: "planner" },
-    { href: "/teacher/toolkit", label: "Teaching Toolkit", description: "Pose finder, checklists & cues", icon: "toolkit" }
+    { href: "/teacher/toolkit", label: "Teaching Toolkit", description: "Pose finder, checklists & cues", icon: "toolkit" },
+    { href: "/teacher/sequences", label: "Sequence Library", description: "Saved plans & notes", icon: "note" }
   ] }
 ] as const;
 
