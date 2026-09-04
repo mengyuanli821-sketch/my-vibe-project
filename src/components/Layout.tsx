@@ -14,12 +14,13 @@ const NAVIGATION = [
     { href: "/students/new", label: "Add student", description: "Create a profile", icon: "add" },
     { href: "/class-notes/new", label: "Record class", description: "Post-class notes", icon: "note" }
   ] },
-  { label: "Teaching", icon: "teacher", items: [
-    { href: "/teacher", label: "Teacher Studio", description: "Profile & coaching", icon: "studio" },
-    { href: "/teacher/planner", label: "Class Planner", description: "Build a timed sequence", icon: "planner" },
-    { href: "/teacher/toolkit", label: "Teaching Toolkit", description: "Pose finder, checklists & cues", icon: "toolkit" },
-    { href: "/teacher/sequences", label: "Sequence Library", description: "Saved plans & notes", icon: "note" }
-  ] }
+    { label: "Teaching", icon: "teacher", items: [
+      { href: "/teacher", label: "Teacher Studio", description: "Profile & coaching", icon: "studio" },
+      { href: "/teacher/planner", label: "Class Planner", description: "Build a timed sequence", icon: "planner" },
+      { href: "/teacher/toolkit", label: "Teaching Toolkit", description: "Pose finder, checklists & cues", icon: "toolkit" },
+      { href: "/teacher/sequences", label: "Sequence Library", description: "Saved plans & notes", icon: "note" },
+      { href: "/teacher/session", label: "Live class", description: "Run a saved sequence", icon: "planner" }
+    ] }
 ] as const;
 
 export function Layout({ children, title, action }: LayoutProps) {

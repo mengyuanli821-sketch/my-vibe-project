@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { POSE_LIBRARY } from "@/lib/poseLibrary";
-import { DRAFT_KEY, makeSequenceItem, readSavedSequences, SHORTLIST_KEY, type SavedSequence, writeSavedSequences } from "@/lib/sequences";
+import { buildCueGroups, buildReadiness } from "@/lib/sequenceGuidance";
+import { DRAFT_KEY, fetchSavedSequences, makeSequenceItem, migrateBrowserSequences, persistSavedSequence, removeSavedSequence, SHORTLIST_KEY, type SavedSequence } from "@/lib/sequences";
 import type { StudentWithStats } from "@/types/student";
 
 const WORKFLOWS: Record<string, string[]> = {
@@ -45,9 +46,12 @@ export default function SequenceLibraryPage() {
   const [tagFilter, setTagFilter] = useState("全部");
   const [notice, setNotice] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [guidanceId, setGuidanceId] = useState<string | null>(null);
+  const [cueTabs, setCueTabs] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
-    setSequences(readSavedSequences());
+    fetchSavedSequences().then(migrateBrowserSequences).then(setSequences).catch(() => setNotice("無法讀取序列資料庫，請重新整理再試。"));
     fetch("/api/students").then((response) => response.json()).then((data) => setStudents(data.students ?? [])).catch(() => setStudents([]));
     if (new URLSearchParams(window.location.search).has("saved")) setNotice("序列已保存，可在下方補充備忘錄與標籤。");
   }, []);
@@ -59,10 +63,16 @@ export default function SequenceLibraryPage() {
     return matchesQuery && (tagFilter === "全部" || sequence.tags.includes(tagFilter) || sequence.studentIds.includes(tagFilter));
   }), [query, sequences, tagFilter]);
 
-  function persist(next: SavedSequence[]) { setSequences(next); writeSavedSequences(next); }
-  function updateSequence(id: string, patch: Partial<SavedSequence>) { persist(sequences.map((sequence) => sequence.id === id ? { ...sequence, ...patch, updatedAt: new Date().toISOString() } : sequence)); }
+  function updateSequence(id: string, patch: Partial<SavedSequence>) {
+    const updated = sequences.find((sequence) => sequence.id === id);
+    if (!updated) return;
+    const next = { ...updated, ...patch, updatedAt: new Date().toISOString() };
+    setSequences((current) => current.map((sequence) => sequence.id === id ? next : sequence));
+    persistSavedSequence(next).catch(() => { setNotice("更新未能寫入資料庫，請再試一次。"); void fetchSavedSequences().then(setSequences); });
+  }
   function addTag(sequence: SavedSequence, raw: string) { const tag = raw.trim().replace(/^#/, ""); if (tag && !sequence.tags.includes(tag)) updateSequence(sequence.id, { tags: [...sequence.tags, tag] }); }
-  function deleteSequence(id: string) { persist(sequences.filter((sequence) => sequence.id !== id)); setDeleteId(null); setNotice("序列已刪除。"); }
+  async function deleteSequence(id: string) { try { await removeSavedSequence(id); setSequences((current) => current.filter((sequence) => sequence.id !== id)); setDeleteId(null); setNotice("序列已刪除。"); } catch { setNotice("刪除失敗，資料仍保留在資料庫中。"); } }
+  function toggleCheck(sequenceId: string, itemId: string) { setChecked((current) => ({ ...current, [sequenceId]: (current[sequenceId] ?? []).includes(itemId) ? (current[sequenceId] ?? []).filter((id) => id !== itemId) : [...(current[sequenceId] ?? []), itemId] })); }
   function generate() {
     const selected = students.filter((student) => studentIds.includes(student.id));
     const ids = adaptForStudents(WORKFLOWS[focus], selected).filter((id) => POSE_LIBRARY.some((pose) => pose.id === id));
@@ -94,7 +104,28 @@ export default function SequenceLibraryPage() {
       {visible.length ? <div className="sequence-card-grid">{visible.map((sequence) => {
         const poseNames = sequence.items.map((item) => POSE_LIBRARY.find((pose) => pose.id === item.poseId)?.zh).filter(Boolean);
         const names = students.filter((student) => sequence.studentIds.includes(student.id)).map((student) => student.name);
-        return <article className="sequence-card" key={sequence.id}><header><div><div className="sequence-card-meta"><span>{sequence.classStyle}</span><span>{sequence.duration} 分鐘</span><span>{sequence.items.length} 個步驟</span></div><h3>{sequence.name}</h3><p>{sequence.theme || "未設定主題"}</p></div><div className="sequence-card-actions"><Link href={`/teacher/planner?edit=${sequence.id}`}>編輯序列 →</Link><button aria-label={`刪除${sequence.name}`} onClick={() => setDeleteId(sequence.id)} type="button">刪除</button></div></header><div className="sequence-pose-preview">{poseNames.slice(0, 6).map((name, index) => <span key={`${name}-${index}`}>{index + 1}. {name}</span>)}{poseNames.length > 6 ? <i>＋{poseNames.length - 6}</i> : null}</div>{names.length ? <div className="sequence-students">學員：{names.join("、")}</div> : null}<label className="sequence-memo"><span>老師備忘錄</span><textarea onBlur={(event) => updateSequence(sequence.id, { memo: event.target.value })} defaultValue={sequence.memo} placeholder="記下教學觀察、下次調整或替代方案…" /></label><div className="sequence-tags">{sequence.tags.map((tag) => <button aria-label={`移除標籤 ${tag}`} key={tag} onClick={() => updateSequence(sequence.id, { tags: sequence.tags.filter((item) => item !== tag) })} type="button">#{tag} ×</button>)}<input aria-label="新增標籤" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(sequence, event.currentTarget.value); event.currentTarget.value = ""; } }} placeholder="＋ 學生／訓練方向標籤" /></div>{deleteId === sequence.id ? <div className="sequence-delete-confirm" role="alert"><p>確定刪除「{sequence.name}」？此操作無法復原。</p><div><button onClick={() => setDeleteId(null)} type="button">取消</button><button onClick={() => deleteSequence(sequence.id)} type="button">確認刪除</button></div></div> : null}</article>;
+        const rows = sequence.items.map((item) => ({ item, pose: POSE_LIBRARY.find((pose) => pose.id === item.poseId) })).filter((row): row is { item: (typeof sequence.items)[number]; pose: (typeof POSE_LIBRARY)[number] } => Boolean(row.pose));
+        const readiness = buildReadiness(rows, sequence.duration, sequence.props);
+        const cueGroups = buildCueGroups(rows);
+        const activeCueId = cueTabs[sequence.id] ?? "sequence";
+        const activeCues = cueGroups.find((group) => group.id === activeCueId) ?? cueGroups[0];
+        const isGuidanceOpen = guidanceId === sequence.id;
+        return <article className={`sequence-card ${isGuidanceOpen ? "sequence-card-guidance-open" : ""}`} key={sequence.id}>
+          <header><div><div className="sequence-card-meta"><span>{sequence.classStyle}</span><span>{sequence.duration} 分鐘</span><span>{sequence.items.length} 個步驟</span></div><h3>{sequence.name}</h3><p>{sequence.theme || "未設定主題"}</p></div><div className="sequence-card-actions"><Link className="sequence-start-link" href={`/teacher/session?id=${sequence.id}`}>▶ 開始上課</Link><Link href={`/teacher/planner?edit=${sequence.id}`}>編輯序列 →</Link><button aria-label={`刪除${sequence.name}`} onClick={() => setDeleteId(sequence.id)} type="button">刪除</button></div></header>
+          <div className="sequence-pose-preview">{poseNames.slice(0, 6).map((name, index) => <span key={`${name}-${index}`}>{index + 1}. {name}</span>)}{poseNames.length > 6 ? <i>＋{poseNames.length - 6}</i> : null}</div>
+          {names.length ? <div className="sequence-students">學員：{names.join("、")}</div> : null}
+          <button aria-expanded={isGuidanceOpen} className="sequence-guidance-toggle" onClick={() => setGuidanceId(isGuidanceOpen ? null : sequence.id)} type="button"><span>課前準備與包容性教學口令</span><i>{isGuidanceOpen ? "收起 ↑" : "查看 →"}</i></button>
+          {isGuidanceOpen ? <div className="saved-sequence-guidance">
+            <p className="guidance-workflow-note">固定 workflow · 全部 {rows.length} 個體式 → 時間與輔具檢查 → 逐式口令 → 體式轉換 → 替代選項 → 自主選擇</p>
+            <div className="saved-guidance-grid">
+              <section className="toolkit-panel"><div className="toolkit-panel-heading"><div><p className="eyebrow">Before class</p><h2>課前準備檢查</h2></div><button onClick={() => setChecked((current) => ({ ...current, [sequence.id]: [] }))} type="button">重設</button></div><div className="toolkit-checklist">{readiness.map((item) => { const complete = (checked[sequence.id] ?? []).includes(item.id); return <button aria-pressed={complete} className={complete ? "toolkit-check-complete" : ""} key={item.id} onClick={() => toggleCheck(sequence.id, item.id)} type="button"><span>{complete ? "✓" : ""}</span><div><strong>{item.title}</strong><p>{item.detail}</p></div></button>; })}</div></section>
+              <section className="toolkit-panel"><div className="toolkit-panel-heading"><div><p className="eyebrow">In the room · 依完整序列生成</p><h2>包容性教學口令</h2></div></div><div className="toolkit-cue-tabs">{cueGroups.map((group) => <button aria-pressed={activeCueId === group.id} key={group.id} onClick={() => setCueTabs((current) => ({ ...current, [sequence.id]: group.id }))} type="button">{group.label}</button>)}</div><div className="toolkit-cues">{activeCues.cues.map((cue, index) => <blockquote key={`${cue}-${index}`}>“{cue}”</blockquote>)}</div></section>
+            </div>
+          </div> : null}
+          <label className="sequence-memo"><span>老師備忘錄</span><textarea onBlur={(event) => updateSequence(sequence.id, { memo: event.target.value })} defaultValue={sequence.memo} placeholder="記下教學觀察、下次調整或替代方案…" /></label>
+          <div className="sequence-tags">{sequence.tags.map((tag) => <button aria-label={`移除標籤 ${tag}`} key={tag} onClick={() => updateSequence(sequence.id, { tags: sequence.tags.filter((item) => item !== tag) })} type="button">#{tag} ×</button>)}<input aria-label="新增標籤" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(sequence, event.currentTarget.value); event.currentTarget.value = ""; } }} placeholder="＋ 學生／訓練方向標籤" /></div>
+          {deleteId === sequence.id ? <div className="sequence-delete-confirm" role="alert"><p>確定刪除「{sequence.name}」？此操作無法復原。</p><div><button onClick={() => setDeleteId(null)} type="button">取消</button><button onClick={() => deleteSequence(sequence.id)} type="button">確認刪除</button></div></div> : null}
+        </article>;
       })}</div> : <div className="sequence-empty"><span>☰</span><h3>{sequences.length ? "沒有符合條件的序列" : "還沒有保存的序列"}</h3><p>{sequences.length ? "試著清除搜尋或切換到全部。" : "可以使用上方課程建議，或從體式庫開始手動編排。"}</p></div>}
     </section>
   </Layout>;

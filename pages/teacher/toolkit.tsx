@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { PoseIllustration } from "@/components/PoseIllustration";
 import { FOCUS_FILTERS, POSE_LIBRARY, POSITION_FILTERS, TRADITION_FILTERS } from "@/lib/poseLibrary";
-import { buildCueGroups, buildReadiness } from "@/lib/sequenceGuidance";
-import { DRAFT_KEY, makeSequenceItem, readShortlist, SHORTLIST_KEY, type SequenceItem } from "@/lib/sequences";
+import { makeSequenceItem, readShortlist, SHORTLIST_KEY, type SequenceItem } from "@/lib/sequences";
 
 const ARC = [
   ["Arrival", "Observe breath, energy and current symptoms before adding load."],
@@ -15,8 +14,6 @@ const ARC = [
 ];
 
 export default function TeachingToolkitPage() {
-  const [checked, setChecked] = useState<string[]>([]);
-  const [cueGroup, setCueGroup] = useState("sequence");
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<(typeof POSITION_FILTERS)[number]>("全部");
   const [focus, setFocus] = useState<(typeof FOCUS_FILTERS)[number]>("全部");
@@ -25,11 +22,8 @@ export default function TeachingToolkitPage() {
   const [shortlist, setShortlist] = useState<SequenceItem[]>([]);
   const [shortlistHydrated, setShortlistHydrated] = useState(false);
   const [draggedPose, setDraggedPose] = useState<string | null>(null);
-  const [draftContext, setDraftContext] = useState<{ title?: string; duration?: string; props?: string }>({});
 
-  useEffect(() => { try { setChecked(JSON.parse(window.localStorage.getItem("sattva-readiness") || "[]")); } catch { setChecked([]); } }, []);
-  useEffect(() => { window.localStorage.setItem("sattva-readiness", JSON.stringify(checked)); }, [checked]);
-  useEffect(() => { setShortlist(readShortlist()); try { setDraftContext(JSON.parse(window.localStorage.getItem(DRAFT_KEY) || "{}")); } catch { setDraftContext({}); } setShortlistHydrated(true); }, []);
+  useEffect(() => { setShortlist(readShortlist()); setShortlistHydrated(true); }, []);
   useEffect(() => { if (shortlistHydrated) window.localStorage.setItem(SHORTLIST_KEY, JSON.stringify(shortlist)); }, [shortlist, shortlistHydrated]);
   useEffect(() => {
     if (!openPose) return;
@@ -40,7 +34,6 @@ export default function TeachingToolkitPage() {
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", closeOnEscape); };
   }, [openPose]);
 
-  function toggle(id: string) { setChecked((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]); }
   function addToShortlist(id: string) { setShortlist((current) => [...current, makeSequenceItem(id)]); }
   function removeShortlist(instanceId: string) { setShortlist((current) => current.filter((item) => item.instanceId !== instanceId)); }
   function moveShortlist(id: string, targetId: string) {
@@ -63,9 +56,6 @@ export default function TeachingToolkitPage() {
 
   const selectedPose = POSE_LIBRARY.find((pose) => pose.id === openPose);
   const shortlistedPoses = shortlist.map((item) => ({ item, pose: POSE_LIBRARY.find((pose) => pose.id === item.poseId) })).filter((row): row is { item: SequenceItem; pose: (typeof POSE_LIBRARY)[number] } => Boolean(row.pose));
-  const readiness = useMemo(() => buildReadiness(shortlistedPoses, Number(draftContext.duration) || shortlistedPoses.reduce((sum, row) => sum + row.item.minutes, 0), draftContext.props), [draftContext.duration, draftContext.props, shortlistedPoses]);
-  const cueGroups = useMemo(() => buildCueGroups(shortlistedPoses), [shortlistedPoses]);
-  const activeCues = cueGroups.find((group) => group.id === cueGroup) ?? cueGroups[0];
 
   function resetPoseFilters() { setQuery(""); setPosition("全部"); setFocus("全部"); setTradition("全部"); }
 
@@ -115,9 +105,7 @@ export default function TeachingToolkitPage() {
         <footer><div><b>可用輔具</b><span>{selectedPose.props.join(" · ")}</span></div><a href={selectedPose.source.url} rel="noreferrer" target="_blank">參考：{selectedPose.source.label} ↗</a><button onClick={() => addToShortlist(selectedPose.id)} type="button">＋ 加入課程備選{shortlist.some((item) => item.poseId === selectedPose.id) ? `（已有 ${shortlist.filter((item) => item.poseId === selectedPose.id).length}）` : ""}</button></footer>
       </article></div> : null}
       <div className="toolkit-grid">
-        <section className="toolkit-panel"><div className="toolkit-panel-heading"><div><p className="eyebrow">02 · Before class · {draftContext.title || "目前序列"}</p><h2>課前準備檢查</h2></div><button onClick={() => setChecked([])} type="button">重設</button></div><div className="toolkit-checklist">{readiness.map((item) => { const complete = checked.includes(item.id); return <button aria-pressed={complete} className={complete ? "toolkit-check-complete" : ""} key={item.id} onClick={() => toggle(item.id)} type="button"><span>{complete ? "✓" : ""}</span><div><strong>{item.title}</strong><p>{item.detail}</p></div></button>; })}</div></section>
-        <section className="toolkit-panel"><div className="toolkit-panel-heading"><div><p className="eyebrow">03 · In the room · 依目前序列生成</p><h2>包容性教學口令</h2></div></div><div className="toolkit-cue-tabs">{cueGroups.map((group) => <button aria-pressed={cueGroup === group.id} key={group.id} onClick={() => setCueGroup(group.id)} type="button">{group.label}</button>)}</div><div className="toolkit-cues">{activeCues.cues.map((cue) => <blockquote key={cue}>“{cue}”</blockquote>)}</div></section>
-        <section className="toolkit-panel toolkit-panel-wide"><div className="toolkit-panel-heading"><div><p className="eyebrow">04 · Sequence review</p><h2>Four-part arc audit</h2></div><span>Teacher review</span></div><div className="toolkit-arc">{ARC.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><div><strong>{title}</strong><p>{detail}</p></div></article>)}</div><p className="toolkit-scope-note">Teaching support only: do not diagnose or treat health conditions. Pause or adapt movements that reproduce symptoms, and refer concerns beyond your qualifications to an appropriate healthcare professional.</p></section>
+        <section className="toolkit-panel toolkit-panel-wide"><div className="toolkit-panel-heading"><div><p className="eyebrow">02 · Sequence review</p><h2>Four-part arc audit</h2></div><span>Teacher review</span></div><div className="toolkit-arc">{ARC.map(([title, detail], index) => <article key={title}><span>0{index + 1}</span><div><strong>{title}</strong><p>{detail}</p></div></article>)}</div><p className="toolkit-scope-note">Teaching support only: do not diagnose or treat health conditions. Pause or adapt movements that reproduce symptoms, and refer concerns beyond your qualifications to an appropriate healthcare professional.</p></section>
       </div>
     </Layout>
   );

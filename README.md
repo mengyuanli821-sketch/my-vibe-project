@@ -1,10 +1,14 @@
 # AI Student Notebook
 
-Simple MVP for independent yoga, pilates, and barre teachers to record student profiles and class notes in Google Sheets.
+Simple MVP for independent yoga, pilates, and barre teachers to record student profiles, class notes, and reusable class sequences.
 
 ## Setup
 
-The app runs immediately with a local JSON data store at `.data/student-notebook.json` when Google credentials are not configured. To use Google Sheets instead:
+The app runs immediately with a persistent local SQLite database at `.data/sattva.db` when Google credentials are not configured. Restarting the local server does not clear it. Existing student and class-note data in `.data/student-notebook.json` is imported automatically, and sequences from older browser-only versions are imported when the sequence library first opens.
+
+The local database uses Node's built-in SQLite support, so use Node 22.5 or newer. The `.data` directory is intentionally git-ignored because it contains private student information.
+
+To use Google Sheets for student profiles and class notes instead:
 
 1. Create a Google Sheet with two tabs: `Students` and `ClassNotes`.
 2. Add these headers to `Students`:

@@ -1,23 +1,10 @@
 import { google } from "googleapis";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import type { ClassNote, NewClassNoteInput, NewStudentInput, Student, StudentWithStats } from "@/types/student";
 import { getClassStatus } from "@/lib/classStatus";
+import { execute, queryRows } from "@/lib/database";
 
 const STUDENTS_RANGE = "Students!A:J";
 const CLASS_NOTES_RANGE = "ClassNotes!A:O";
-const LOCAL_DATA_PATH = path.join(process.cwd(), ".data", "student-notebook.json");
-
-type LocalData = {
-  students: string[][];
-  classNotes: string[][];
-};
-
-const EMPTY_LOCAL_DATA: LocalData = {
-  students: [],
-  classNotes: []
-};
-
 const STUDENT_COLUMNS = [
   "id",
   "name",
@@ -67,33 +54,16 @@ function hasGoogleSheetsConfig() {
   );
 }
 
-async function readLocalData(): Promise<LocalData> {
-  try {
-    const contents = await readFile(LOCAL_DATA_PATH, "utf8");
-    const data = JSON.parse(contents) as Partial<LocalData>;
-
-    return {
-      students: Array.isArray(data.students) ? data.students : [],
-      classNotes: Array.isArray(data.classNotes) ? data.classNotes : []
-    };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { ...EMPTY_LOCAL_DATA };
-    }
-
-    throw error;
-  }
+function localRows(range: string): string[][] {
+  const columns = range.startsWith("Students!") ? STUDENT_COLUMNS : CLASS_NOTE_COLUMNS;
+  const table = range.startsWith("Students!") ? "students" : "class_notes";
+  return queryRows(`SELECT ${columns.join(", ")} FROM ${table}`).map((row) => columns.map((column) => String(row[column] ?? "")));
 }
 
-function localCollectionForRange(data: LocalData, range: string) {
-  return range.startsWith("Students!") ? data.students : data.classNotes;
-}
-
-async function appendLocalRow(range: string, values: string[]) {
-  const data = await readLocalData();
-  localCollectionForRange(data, range).push(values);
-  await mkdir(path.dirname(LOCAL_DATA_PATH), { recursive: true });
-  await writeFile(LOCAL_DATA_PATH, JSON.stringify(data, null, 2), "utf8");
+function appendLocalRow(range: string, values: string[]) {
+  const columns = range.startsWith("Students!") ? STUDENT_COLUMNS : CLASS_NOTE_COLUMNS;
+  const table = range.startsWith("Students!") ? "students" : "class_notes";
+  execute(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`, values);
 }
 
 function getSheetsClient() {
@@ -170,8 +140,7 @@ function classDateTime(note: ClassNote) {
 
 async function readRows(range: string) {
   if (!hasGoogleSheetsConfig()) {
-    const data = await readLocalData();
-    return localCollectionForRange(data, range);
+    return localRows(range);
   }
 
   const sheets = getSheetsClient();
@@ -185,7 +154,7 @@ async function readRows(range: string) {
 
 async function appendRow(range: string, values: string[]) {
   if (!hasGoogleSheetsConfig()) {
-    await appendLocalRow(range, values);
+    appendLocalRow(range, values);
     return;
   }
 

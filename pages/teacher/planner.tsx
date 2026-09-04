@@ -6,7 +6,7 @@ import { FormField, TextArea, TextInput } from "@/components/FormField";
 import { Layout } from "@/components/Layout";
 import { PoseIllustration } from "@/components/PoseIllustration";
 import { POSE_LIBRARY } from "@/lib/poseLibrary";
-import { DRAFT_KEY, makeSequenceItem, readSavedSequences, readShortlist, SHORTLIST_KEY, type SavedSequence, type SequenceItem, writeSavedSequences } from "@/lib/sequences";
+import { DRAFT_KEY, fetchSavedSequence, makeSequenceItem, persistSavedSequence, readShortlist, SHORTLIST_KEY, type SavedSequence, type SequenceItem } from "@/lib/sequences";
 import { splitSelections, toggleSelection } from "@/lib/options";
 import type { StudentWithStats } from "@/types/student";
 
@@ -32,17 +32,19 @@ export default function ClassPlannerPage() {
 
   useEffect(() => {
     fetch("/api/students").then((response) => response.json()).then((data) => setStudents(data.students ?? [])).catch(() => setStudents([]));
-    try {
+    async function hydrate() { try {
       const editId = new URLSearchParams(window.location.search).get("edit");
-      const source = editId ? readSavedSequences().find((sequence) => sequence.id === editId) : null;
+      const source = editId ? await fetchSavedSequence(editId) : null;
       const draft = source ?? JSON.parse(window.localStorage.getItem(DRAFT_KEY) || "{}");
       setItems(source?.items ?? readShortlist());
       if (draft.name || draft.title) setTitle(draft.name || draft.title); if (draft.theme) setTheme(draft.theme); if (draft.duration) setDuration(String(draft.duration));
       if (draft.classStyle) setClassStyle(draft.classStyle); if (draft.props) setProps(draft.props); if (draft.intention) setIntention(draft.intention);
       if (draft.studentIds) setStudentIds(draft.studentIds);
     } catch { setItems(readShortlist()); }
-    setHydrated(true);
-    setItemsHydrated(true);
+      setHydrated(true);
+      setItemsHydrated(true);
+    }
+    void hydrate();
   }, []);
 
   useEffect(() => {
@@ -66,19 +68,20 @@ export default function ClassPlannerPage() {
   function nudgeItem(instanceId: string, direction: -1 | 1) { setItems((current) => { const from = current.findIndex((item) => item.instanceId === instanceId); const to = from + direction; if (from < 0 || to < 0 || to >= current.length) return current; const next = [...current]; [next[from], next[to]] = [next[to], next[from]]; return next; }); dirty(); }
   function removeItem(instanceId: string) { setItems((current) => current.filter((item) => item.instanceId !== instanceId)); dirty(); }
   function duplicateItem(item: SequenceItem) { setItems((current) => { const index = current.findIndex((entry) => entry.instanceId === item.instanceId); const next = [...current]; next.splice(index + 1, 0, makeSequenceItem(item.poseId, { minutes: item.minutes, phase: item.phase, note: item.note })); return next; }); dirty(); }
-  function saveSequence() {
+  async function saveSequence() {
     const name = title.trim();
     if (!name) { window.alert("請先為序列命名"); return; }
     if (!items.length) { window.alert("請先加入至少一個體式"); return; }
     const now = new Date().toISOString();
     const editId = new URLSearchParams(window.location.search).get("edit");
-    const all = readSavedSequences();
-    const previous = editId ? all.find((sequence) => sequence.id === editId) : undefined;
-    const next: SavedSequence = { id: previous?.id ?? `sequence_${Date.now()}`, name, theme, duration: Number(duration), classStyle, props, intention, studentIds, items, memo: previous?.memo ?? "", tags: previous?.tags ?? [], createdAt: previous?.createdAt ?? now, updatedAt: now };
-    writeSavedSequences(previous ? all.map((sequence) => sequence.id === previous.id ? next : sequence) : [next, ...all]);
-    window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, theme, duration, classStyle, props, intention, studentIds }));
-    setSaved(true);
-    void router.push("/teacher/sequences?saved=1");
+    try {
+      const previous = editId ? await fetchSavedSequence(editId) ?? undefined : undefined;
+      const next: SavedSequence = { id: previous?.id ?? `sequence_${Date.now()}`, name, theme, duration: Number(duration), classStyle, props, intention, studentIds, items, memo: previous?.memo ?? "", tags: previous?.tags ?? [], createdAt: previous?.createdAt ?? now, updatedAt: now };
+      await persistSavedSequence(next);
+      window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, theme, duration, classStyle, props, intention, studentIds }));
+      setSaved(true);
+      void router.push("/teacher/sequences?saved=1");
+    } catch (error) { window.alert(error instanceof Error ? error.message : "序列保存失敗"); }
   }
 
   return <Layout title="課程編排" action={<div className="flex gap-2"><Link className="secondary-button inline-flex" href="/teacher/sequences">已存序列</Link><Link className="premium-button inline-flex" href="/teacher/toolkit">＋ 從體式庫加入</Link></div>}>
@@ -87,7 +90,7 @@ export default function ClassPlannerPage() {
     <section className="planner-intro"><div><p className="eyebrow">Teacher-led sequencing</p><h2 className="mt-2 font-serif text-3xl text-[#294a3c] sm:text-4xl">把體式排成一堂完整的課。</h2><p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-600">同一體式可重複加入。拖曳排序，快速設定階段與時間，完成後命名保存到序列庫。</p></div><span className="planner-sanskrit">krama<br /><small>one step at a time</small></span></section>
     <div className="planner-workspace mt-6">
       <section className="planner-form-card">
-        <div className="mb-5 flex items-center justify-between"><div><p className="eyebrow">01 · Class context</p><h2 className="mt-1 font-serif text-2xl text-[#294a3c]">課堂設定</h2></div><span className="planner-source-badge">本機保存</span></div>
+        <div className="mb-5 flex items-center justify-between"><div><p className="eyebrow">01 · Class context</p><h2 className="mt-1 font-serif text-2xl text-[#294a3c]">課堂設定</h2></div><span className="planner-source-badge">資料庫保存</span></div>
         <div className="grid gap-4">
           <FormField label="序列名稱" hint="保存時必填"><TextInput name="title" onChange={(event) => { setTitle(event.target.value); dirty(); }} placeholder="例如：穩定根基與髖部流動" value={title} /></FormField>
           <FormField label="學員" hint="可選擇一位或多位"><div className={`student-select ${studentPickerOpen ? "student-select-open" : ""}`} ref={studentPickerRef}><button aria-expanded={studentPickerOpen} className="student-select-trigger" onClick={() => setStudentPickerOpen((open) => !open)} type="button"><span>{selectedStudents.length ? selectedStudents.map((student) => <i key={student.id}>{student.name}</i>) : <em>選擇學員…</em>}</span><b>{selectedStudents.length ? `已選 ${selectedStudents.length} 位` : "選填"}<i>⌄</i></b></button>{studentPickerOpen ? <div className="student-select-menu" role="listbox">{students.map((student) => { const selected = studentIds.includes(student.id); return <button aria-selected={selected} className={`planner-student-option ${selected ? "planner-student-option-selected" : ""}`} key={student.id} onClick={() => { setStudentIds((current) => splitSelections(toggleSelection(current.join(", "), student.id))); dirty(); }} role="option" type="button"><span className="planner-check">{selected ? "✓" : "+"}</span><span><strong>{student.name}</strong><small>{student.experience_level || "程度未設定"} · {student.class_count} 堂課</small></span></button>; })}</div> : null}</div></FormField>

@@ -19,11 +19,11 @@ export function buildReadiness(rows: SequenceRow[], duration: number, propsText 
 }
 
 export function buildCueGroups(rows: SequenceRow[]) {
-  const main = rows.filter(({ item }) => item.phase === "主要探索");
-  const key = (main.length ? main : rows).slice(0, 4);
-  const poseCues = key.flatMap(({ pose }) => pose.cues.slice(0, 1).map((cue) => `${pose.zh}：${cue}`));
-  const transitions = rows.slice(0, -1).slice(0, 4).map(({ pose }, index) => `從${pose.zh}到${rows[index + 1].pose.zh}：先穩定呼吸，再移動支撐點。`);
-  const options = key.map(({ pose }) => `${pose.zh}可以減少幅度，或使用${pose.props.slice(0, 2).join("／") || "地面支撐"}。`);
+  // This order is deliberately deterministic: every selected pose is processed once,
+  // followed by every transition, then a support option for every pose.
+  const poseCues = rows.flatMap(({ pose }) => pose.cues.slice(0, 1).map((cue) => `${pose.zh}：${cue}`));
+  const transitions = rows.slice(0, -1).map(({ pose }, index) => `從${pose.zh}到${rows[index + 1].pose.zh}：先穩定呼吸，再移動支撐點。`);
+  const options = rows.map(({ pose }) => `${pose.zh}可以減少幅度，或使用${pose.props.slice(0, 2).join("／") || "地面支撐"}。`);
   return [
     { id: "sequence", label: "主要體式", cues: poseCues.length ? poseCues : ["完成序列後，這裡會產生對應口令。"] },
     { id: "transition", label: "體式轉換", cues: transitions.length ? transitions : ["先建立下一個支撐點，再慢慢轉移重量。"] },
